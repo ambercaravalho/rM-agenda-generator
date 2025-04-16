@@ -33,17 +33,37 @@ rM-agenda-generator
 
 ## Installation
 
-### Prerequisites
-- Ensure you have Python 3.7+ installed on your system.
+### Pre-built Packages (Coming Soon)
+Pre-built packages for Windows, macOS, and Linux will be available for download in the future. Once available, you'll be able to download and install them directly without needing to build from source.
 
-### Installing Dependencies
+### Building from Source
+
+#### Prerequisites
+- Python 3.7+ installed on your system
+
+#### Setting up a Virtual Environment (Recommended)
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/rM-agenda-generator.git
+   git clone https://github.com/ambercaravalho/rM-agenda-generator.git
    cd rM-agenda-generator
    ```
 
-2. Install the required packages:
+2. Create a virtual environment:
+   ```
+   python -m venv venv
+   ```
+
+3. Activate the virtual environment:
+   - On Windows:
+     ```
+     venv\Scripts\activate
+     ```
+   - On macOS/Linux:
+     ```
+     source venv/bin/activate
+     ```
+
+4. Install the required packages:
    ```
    pip install -r requirements.txt
    ```
