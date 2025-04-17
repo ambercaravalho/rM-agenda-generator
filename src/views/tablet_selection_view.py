@@ -10,8 +10,10 @@ from kivy.uix.image import Image
 from kivy.metrics import dp
 from kivy.app import App
 from kivy.clock import Clock
+from kivy.uix.popup import Popup
 
 from utils.ui_helpers import SafeLabel
+from utils.theme_manager import ThemeManager
 
 class DeviceButton(BoxLayout):
     """Custom button with image for device selection."""
@@ -20,22 +22,32 @@ class DeviceButton(BoxLayout):
         super(DeviceButton, self).__init__(orientation='vertical', **kwargs)
         self.size_hint = (1, None)
         self.height = dp(250)
-        self.padding = dp(10)
-        self.spacing = dp(10)
+        self.padding = ThemeManager.DIMENSIONS['padding']
+        self.spacing = ThemeManager.DIMENSIONS['spacing_medium']
         
         # Image
-        self.image = Image(source=image_source, allow_stretch=True, keep_ratio=True, 
-                           size_hint=(1, 0.8))
+        self.image = Image(
+            source=image_source, 
+            allow_stretch=True, 
+            keep_ratio=True, 
+            size_hint=(1, 0.8)
+        )
         self.add_widget(self.image)
         
         # Button
-        self.button = Button(text=text, size_hint=(1, 0.2), height=dp(40))
+        self.button = Button(
+            text=text, 
+            size_hint=(1, 0.2), 
+            height=dp(40),
+            color=ThemeManager.COLORS['text_primary'],
+            background_color=ThemeManager.COLORS['primary']
+        )
         self.button.bind(on_press=callback)
         self.add_widget(self.button)
         
         # Schedule a delayed reload to ensure images load properly
         Clock.schedule_once(self._reload_image, 0.5)
-        
+    
     def _reload_image(self, dt):
         """Reload the image after a delay to ensure it loads properly."""
         if self.image:
@@ -158,5 +170,22 @@ class TabletSelectionView(Screen):
             app.select_tablet(tablet_model)
         except Exception as e:
             print(f"Error in select_tablet: {e}")
+            # Show error message
+            popup = Popup(
+                title='Error',
+                content=Label(text=f"Could not select tablet: {str(e)}"),
+                size_hint=(None, None),
+                size=(dp(400), dp(200))
+            )
+            popup.open()
+            
             # Try again after a delay
-            Clock.schedule_once(lambda dt: app.select_tablet(tablet_model), 0.5)
+            Clock.schedule_once(lambda dt: self._retry_tablet_selection(tablet_model), 0.5)
+
+    def _retry_tablet_selection(self, tablet_model):
+        """Retry tablet selection after a delay."""
+        app = App.get_running_app()
+        try:
+            app.select_tablet(tablet_model)
+        except Exception as e:
+            print(f"Retry tablet selection also failed: {e}")

@@ -1,275 +1,168 @@
 """
 PDF generator for the reMarkable Agenda Generator.
+Creates calendar PDFs optimized for reMarkable tablets.
 """
+import os
+import calendar
 from datetime import datetime, timedelta
-from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-from kivy.app import App
 
-def generate_calendar_pdf(view_type, date, output_path, include_months=True, include_weeks=True, include_days=True):
+def generate_calendar_pdf(view_type, date, output_path):
     """
-    Generate a calendar PDF with the specified view type and date.
+    Generate a calendar PDF with the specified view type for the given date.
     
     Args:
-        view_type: The type of calendar view ('month', 'week', or 'day')
-        date: The date to generate the calendar for
-        output_path: The path to save the PDF to
-        include_months: Whether to include monthly view (default: True)
-        include_weeks: Whether to include weekly view (default: True)
-        include_days: Whether to include daily view (default: True)
-        
-    Returns:
-        The path to the generated PDF file
+        view_type (str): 'month', 'week', or 'day'
+        date (datetime): Date to use for the calendar
+        output_path (str): Path to save the PDF
     """
-    try:
-        # Get dimensions from app configuration
-        app = App.get_running_app()
-        dimensions = app.get_dimensions()
-        supports_color = app.supports_color
-        
-        # Create the PDF document
-        c = canvas.Canvas(output_path, pagesize=(dimensions['width_pt'], dimensions['height_pt']))
-        
-        # Based on the selected components, generate multiple views
-        # If no components are selected, default to the primary view type
-        any_component_selected = include_months or include_weeks or include_days
-        
-        if not any_component_selected:
-            if view_type == 'month':
-                include_months = True
-            elif view_type == 'week':
-                include_weeks = True
-            elif view_type == 'day':
-                include_days = True
-        
-        # Generate requested views
-        if include_months:
-            _draw_month_view(c, date, supports_color, dimensions)
-            if include_weeks or include_days:
-                c.showPage()  # Start a new page
-        
-        if include_weeks:
-            _draw_week_view(c, date, supports_color, dimensions)
-            if include_days:
-                c.showPage()  # Start a new page
-        
-        if include_days:
-            _draw_day_view(c, date, supports_color, dimensions)
-        
-        c.save()
-        return output_path
-    except Exception as e:
-        print(f"Error generating PDF: {e}")
-        # Create a simple error PDF
-        try:
-            c = canvas.Canvas(output_path, pagesize=(595, 842))  # A4 size
-            c.setFont("Helvetica", 14)
-            c.drawString(100, 700, f"Error generating calendar: {str(e)}")
-            c.save()
-        except:
-            pass
-        return output_path
+    # Create the PDF with A5 size (reMarkable tablet dimensions)
+    dimensions = (1404, 1872)  # reMarkable default dimensions (portrait)
+    c = canvas.Canvas(output_path, pagesize=dimensions)
+    
+    # Set some defaults
+    supports_color = False  # reMarkable tablets are typically grayscale
+    
+    # Draw header
+    c.setFont("Helvetica-Bold", 24)
+    if view_type == 'month':
+        title = f"{date.strftime('%B %Y')}"
+        _draw_month_view(c, date, supports_color, dimensions)
+    elif view_type == 'week':
+        # Find the first day of the week (Monday) for the given date
+        start_of_week = date - timedelta(days=date.weekday())
+        end_of_week = start_of_week + timedelta(days=6)
+        title = f"Week of {start_of_week.strftime('%b %d')} - {end_of_week.strftime('%b %d, %Y')}"
+        _draw_week_view(c, date, supports_color, dimensions)
+    elif view_type == 'day':
+        title = f"{date.strftime('%A, %B %d, %Y')}"
+        _draw_day_view(c, date, supports_color, dimensions)
+    else:
+        title = "Calendar"
+    
+    # Draw the title at the top of the page
+    c.drawString(100, dimensions[1] - 100, title)
+    
+    # Save the PDF
+    c.save()
+    return output_path
 
 def _draw_month_view(c, date, supports_color, dimensions):
     """Draw a month view calendar."""
-    try:
-        width_pt = dimensions['width_pt']
-        height_pt = dimensions['height_pt']
-        
-        # Basic page setup
-        c.setFont("Helvetica", 24)
-        
-        # Set title color
-        if supports_color:
-            c.setFillColor(colors.blue)
-        else:
-            c.setFillColor(colors.black)
-            
-        # Draw the month and year at the top
-        month_name = date.strftime("%B %Y")
-        c.drawString(50, height_pt - 50, month_name)
-        
-        # Reset to black for the rest of the text
-        c.setFillColor(colors.black)
-        
-        # Draw the calendar grid
-        days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        
-        # Draw the day names
-        c.setFont("Helvetica", 12)
-        x_start = 50
-        y_start = height_pt - 100
-        cell_width = (width_pt - 100) / 7
-        
-        for i, day in enumerate(days_of_week):
-            c.drawString(x_start + i * cell_width + 10, y_start, day)
-        
-        # Draw horizontal line under day names
-        c.line(x_start, y_start - 10, width_pt - 50, y_start - 10)
-        
-        # Calculate the first day of the month and the number of days
-        first_day = date.replace(day=1)
-        if first_day.month == 12:
-            next_month = first_day.replace(year=first_day.year + 1, month=1, day=1)
-        else:
-            next_month = first_day.replace(month=first_day.month + 1, day=1)
-        days_in_month = (next_month - first_day).days
-        
-        # Calculate the weekday of the first day (0 is Monday in Python's datetime)
-        first_weekday = first_day.weekday()
-        
-        # Draw the days
-        c.setFont("Helvetica", 14)
-        y_pos = y_start - 40
-        day_height = 80
-        
-        for i in range(days_in_month):
-            day_num = i + 1
-            col = (first_weekday + i) % 7
-            row = (first_weekday + i) // 7
-            
-            x = x_start + col * cell_width + 10
-            y = y_pos - row * day_height
-            
-            # Draw the day number
-            c.drawString(x, y, str(day_num))
-            
-            # Draw a small box for the day
-            c.rect(x - 5, y - 60, cell_width - 10, 65, stroke=1, fill=0)
-    except Exception as e:
-        print(f"Error drawing month view: {e}")
-        c.drawString(50, height_pt - 100, f"Error drawing month view: {str(e)}")
+    # Get calendar for the current month
+    cal = calendar.monthcalendar(date.year, date.month)
+    
+    # Define grid parameters
+    width, height = dimensions
+    margin = 50
+    grid_top = height - 150
+    cell_width = (width - 2 * margin) / 7
+    cell_height = 100
+    
+    # Draw weekday headers
+    c.setFont("Helvetica-Bold", 12)
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    for i, day in enumerate(days):
+        x = margin + i * cell_width
+        c.drawString(x + 10, grid_top - 20, day)
+    
+    # Draw the grid
+    c.setFont("Helvetica", 12)
+    for week_idx, week in enumerate(cal):
+        for day_idx, day in enumerate(week):
+            if day > 0:
+                x = margin + day_idx * cell_width
+                y = grid_top - (week_idx + 1) * cell_height
+                
+                # Draw cell border
+                c.rect(x, y, cell_width, cell_height)
+                
+                # Draw day number
+                c.drawString(x + 10, y + cell_height - 20, str(day))
+                
+                # Highlight current day
+                if date.day == day:
+                    c.setFillColor(colors.lightgrey)
+                    c.circle(x + 20, y + cell_height - 15, 12, fill=1)
+                    c.setFillColor(colors.black)
+                    c.drawString(x + 10, y + cell_height - 20, str(day))
 
 def _draw_week_view(c, date, supports_color, dimensions):
     """Draw a week view calendar."""
-    try:
-        width_pt = dimensions['width_pt']
-        height_pt = dimensions['height_pt']
+    # Find the first day of the week (Monday)
+    start_date = date - timedelta(days=date.weekday())
+    
+    # Define grid parameters
+    width, height = dimensions
+    margin = 50
+    grid_top = height - 150
+    
+    # Draw each day of the week
+    c.setFont("Helvetica", 12)
+    for day_idx in range(7):
+        current_date = start_date + timedelta(days=day_idx)
+        day_name = current_date.strftime("%A")
+        day_date = current_date.strftime("%b %d")
         
-        # Basic page setup
-        c.setFont("Helvetica", 24)
+        y = grid_top - day_idx * 100
         
-        # Set title color
-        if supports_color:
-            c.setFillColor(colors.blue)
-        else:
-            c.setFillColor(colors.black)
-        
-        # Calculate start and end of week
-        start_of_week = date - timedelta(days=date.weekday())
-        end_of_week = start_of_week + timedelta(days=6)
-        
-        # Draw the week date range at the top
-        week_title = f"{start_of_week.strftime('%b %d')} - {end_of_week.strftime('%b %d, %Y')}"
-        c.drawString(50, height_pt - 50, week_title)
-        
-        # Reset to black for the rest of the text
-        c.setFillColor(colors.black)
-        
-        # Draw the week grid
-        days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        
-        # Calculate grid dimensions
-        y_start = height_pt - 100
-        grid_height = height_pt - 150
-        time_column_width = 60
-        
-        # Draw day headers
+        # Draw day header
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(margin, y, f"{day_name}, {day_date}")
         c.setFont("Helvetica", 12)
-        day_width = (width_pt - 50 - time_column_width) / 7
         
-        for i, day in enumerate(days_of_week):
-            current_date = start_of_week + timedelta(days=i)
-            day_str = f"{day}\n{current_date.strftime('%d')}"
-            
-            # Center day name in column
-            x_pos = 50 + time_column_width + (i * day_width) + (day_width / 2) - 20
-            c.drawString(x_pos, y_start, day_str)
+        # Draw horizontal line for this day
+        c.line(margin, y - 10, width - margin, y - 10)
         
-        # Draw vertical lines for days
-        for i in range(8):
-            x = 50 + time_column_width + (i * day_width)
-            c.line(x, y_start - 20, x, height_pt - grid_height - 50)
-        
-        # Draw hourly rows
-        c.setFont("Helvetica", 10)
-        hour_height = (grid_height - 50) / 12  # Show 8am to 8pm (12 hours)
-        
-        for i in range(13):  # 13 lines for 12 hour slots
-            hour = i + 8  # Start at 8am
-            y_line = y_start - 20 - (i * hour_height)
-            
-            # Draw hour label
-            hour_label = f"{hour}:00"
-            if hour > 12:
-                hour_label = f"{hour-12}:00 PM"
-            elif hour == 12:
-                hour_label = "12:00 PM"
-            else:
-                hour_label = f"{hour}:00 AM"
-                
-            c.drawString(55, y_line - 5, hour_label)
-            
-            # Draw horizontal line
-            c.line(50 + time_column_width, y_line, width_pt - 50, y_line)
-    except Exception as e:
-        print(f"Error drawing week view: {e}")
-        c.drawString(50, height_pt - 100, f"Error drawing week view: {str(e)}")
+        # Highlight current day
+        if current_date.date() == date.date():
+            c.setFillColor(colors.lightgrey)
+            c.rect(margin - 10, y - 5, width - 2*margin + 20, 25, fill=1)
+            c.setFillColor(colors.black)
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(margin, y, f"{day_name}, {day_date}")
+            c.setFont("Helvetica", 12)
 
 def _draw_day_view(c, date, supports_color, dimensions):
     """Draw a day view calendar."""
-    try:
-        width_pt = dimensions['width_pt']
-        height_pt = dimensions['height_pt']
+    # Define grid parameters
+    width, height = dimensions
+    margin = 50
+    grid_top = height - 150
+    hour_height = 60
+    
+    # Format the date nicely
+    formatted_date = date.strftime("%A, %B %d, %Y")
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(margin, grid_top + 20, formatted_date)
+    
+    # Draw hourly schedule (9 AM to 9 PM)
+    for hour in range(9, 22):
+        y = grid_top - (hour - 8) * hour_height
         
-        # Basic page setup
-        c.setFont("Helvetica", 24)
-        
-        # Set title color
-        if supports_color:
-            c.setFillColor(colors.blue)
-        else:
-            c.setFillColor(colors.black)
-        
-        # Draw the day at the top
-        day_title = date.strftime("%A, %B %d, %Y")
-        c.drawString(50, height_pt - 50, day_title)
-        
-        # Reset to black for the rest of the text
-        c.setFillColor(colors.black)
-        
-        # Draw the day schedule
-        y_start = height_pt - 100
-        schedule_height = height_pt - 150
-        
-        # Draw hourly rows
-        c.setFont("Helvetica", 12)
-        hour_height = 40
-        hours = min(24, int(schedule_height / hour_height))  # As many hours as will fit
-        
-        for i in range(hours + 1):  # +1 for the line at the bottom of the last hour
-            hour = i
-            y_line = y_start - (i * hour_height)
+        # Draw hour label
+        meridian = "AM" if hour < 12 else "PM"
+        display_hour = hour if hour <= 12 else hour - 12
+        if display_hour == 0:
+            display_hour = 12
             
-            # Draw hour label
-            if hour < 24:  # Only draw labels for valid hours
-                if hour == 0:
-                    hour_label = "12:00 AM"
-                elif hour < 12:
-                    hour_label = f"{hour}:00 AM"
-                elif hour == 12:
-                    hour_label = "12:00 PM"
-                else:
-                    hour_label = f"{hour-12}:00 PM"
-                    
-                c.drawString(50, y_line - 15, hour_label)
-            
-            # Draw horizontal line
-            c.line(150, y_line, width_pt - 50, y_line)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(margin, y, f"{display_hour} {meridian}")
         
-        # Draw a vertical line to separate the time from the schedule
-        c.line(150, y_start, 150, y_start - (hours * hour_height))
-    except Exception as e:
-        print(f"Error drawing day view: {e}")
-        c.drawString(50, height_pt - 100, f"Error drawing day view: {str(e)}")
+        # Draw hour line
+        c.line(margin + 60, y, width - margin, y)
+        
+        # Draw half-hour line (lighter)
+        c.setLineWidth(0.5)
+        c.setStrokeColor(colors.grey)
+        c.line(margin + 60, y - hour_height/2, width - margin, y - hour_height/2)
+        c.setLineWidth(1)
+        c.setStrokeColor(colors.black)
+    
+    # Add a notes section at the bottom
+    notes_y = grid_top - 14 * hour_height
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(margin, notes_y, "Notes:")
+    c.line(margin, notes_y - 10, width - margin, notes_y - 10)

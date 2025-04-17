@@ -3,3 +3,5 @@ kivy_venv/
 __pycache__/
 temp/
 output/
+config/
+cache/

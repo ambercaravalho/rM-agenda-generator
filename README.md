@@ -1,47 +1,34 @@
-# reMarkable Agenda Generator
+# reMarkable Agenda Generator (Simplified)
 
 ## Overview
-This project is a Kivy-based desktop application designed to generate calendar PDFs optimized for reMarkable paper tablets. It supports multiple calendar views, weather integration, and task management.
+A streamlined desktop application designed to generate calendar PDFs optimized for reMarkable paper tablets. This simplified version focuses on the core functionality of creating calendar PDFs in different views.
 
 ## Features
 - Calendar generation with month, week, and day views
-- iCalendar integration to import events from external calendars
-- Weather information integration for the current week
-- Task checklist interface for daily planning
-- PDF generation for reMarkable tablets
+- PDF output optimized for reMarkable tablet dimensions
+- Simple tablet selection and configuration
 - Cross-platform support (Windows, macOS, and Linux)
 
 ## Project Structure
 ```
-rM-agenda-generator
-├── src
-│   ├── main.py              # Entry point of the application
-│   ├── app.py               # Main application class
-│   ├── remarkable_api.py    # reMarkable Cloud API integration
-│   ├── views
-│   │   ├── calendar_view.py    # Calendar UI components
-│   │   ├── settings_view.py    # Settings UI
-│   │   └── pdf_preview_view.py # PDF preview UI
-│   ├── utils
-│   │   ├── ical_parser.py     # iCalendar parser
-│   │   ├── weather_api.py     # Weather API integration
-│   │   └── pdf_generator.py   # PDF generation utilities
-│   └── cache                  # Directory for cached data
+rM-agenda-generator/
+├── src/
+│   ├── main.py              # Entry point and main application
+│   ├── utils/
+│   │   └── pdf_generator.py # PDF generation module
+│   ├── output/              # Generated PDFs are saved here
+│   ├── config/              # Simple configuration storage
+│   └── assets/              # Application assets
 ├── requirements.txt         # Project dependencies
 └── README.md                # Project documentation
 ```
 
 ## Installation
 
-### Pre-built Packages (Coming Soon)
-Pre-built packages for Windows, macOS, and Linux will be available for download in the future. Once available, you'll be able to download and install them directly without needing to build from source.
-
-### Building from Source
-
-#### Prerequisites
+### Prerequisites
 - Python 3.7+ installed on your system
 
-#### Setting up a Virtual Environment (Recommended)
+### Setting up a Virtual Environment (Recommended)
 1. Clone this repository:
    ```
    git clone https://github.com/ambercaravalho/rM-agenda-generator.git
@@ -76,14 +63,10 @@ python main.py
 ```
 
 ## Usage
-1. **Calendar Navigation**: Use the calendar views to navigate through month, week, and day displays.
-2. **Import iCalendar**: In settings, add URLs for iCalendar subscriptions.
-3. **Weather Integration**: Add your location and weather API key in settings.
-4. **Task Management**: Use the day view to manage daily tasks with a checklist.
-5. **PDF Generation**: Generate PDFs optimized for reMarkable tablets.
-
-## reMarkable Integration
-Note: The reMarkable Cloud API integration is currently a placeholder. Full integration requires additional development and may be subject to reMarkable's API availability and terms of service.
+1. **Tablet Selection**: Choose your reMarkable tablet model
+2. **Calendar View Selection**: Switch between month, week, and day views
+3. **PDF Generation**: Generate a PDF optimized for your reMarkable tablet
+4. **Download**: The generated PDF will be saved in the `output` directory
 
 ## License
 This project is licensed under the MIT License. See the LICENSE file for more details.
