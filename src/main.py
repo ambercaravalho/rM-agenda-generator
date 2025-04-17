@@ -19,10 +19,12 @@ from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
+from kivy.uix.image import Image
 from kivy.metrics import dp
 from kivy.core.window import Window
 from kivy.clock import Clock
 from datetime import datetime
+import tempfile
 
 class TabletSelectionScreen(Screen):
     def __init__(self, **kwargs):
@@ -80,10 +82,12 @@ class PDFPreviewScreen(Screen):
         view_layout.add_widget(week_button)
         view_layout.add_widget(day_button)
         
-        # Preview area (placeholder)
+        # Preview area with image
         self.preview_area = BoxLayout()
-        self.preview_label = Label(text="Calendar preview will appear here")
-        self.preview_area.add_widget(self.preview_label)
+        self.preview_image = Image(allow_stretch=True, keep_ratio=True)
+        self.preview_label = Label(text="Loading preview...")
+        
+        self.preview_area.add_widget(self.preview_image)
         
         # Generate button
         generate_layout = BoxLayout(size_hint_y=None, height=dp(50))
@@ -102,6 +106,7 @@ class PDFPreviewScreen(Screen):
         # Current view settings
         self.current_view = 'month'
         self.current_date = datetime.now()
+        self.current_preview_path = None
     
     def setup_preview(self, view_type, date):
         """Set up the preview with specified view type and date."""
@@ -116,7 +121,65 @@ class PDFPreviewScreen(Screen):
     
     def update_preview(self):
         """Update the preview based on current settings."""
-        self.preview_label.text = f"{self.current_view.capitalize()} View\n{self.current_date.strftime('%B %Y')}"
+        try:
+            # Clear the previous preview if it exists
+            if hasattr(self, 'preview_image'):
+                self.preview_image.source = ''
+            
+            # Remove any existing temporary preview file
+            if self.current_preview_path and os.path.exists(self.current_preview_path):
+                try:
+                    os.unlink(self.current_preview_path)
+                except:
+                    pass
+            
+            # Generate a new preview
+            from utils.pdf_generator import generate_preview_image
+            
+            # Show loading indicator
+            if hasattr(self, 'preview_label'):
+                self.preview_area.clear_widgets()
+                self.preview_area.add_widget(self.preview_label)
+                self.preview_label.text = "Generating preview..."
+            
+            # Generate the preview image in a separate thread to avoid blocking UI
+            def generate_preview_thread():
+                try:
+                    preview_path = generate_preview_image(self.current_view, self.current_date)
+                    
+                    if preview_path and os.path.exists(preview_path):
+                        self.current_preview_path = preview_path
+                        
+                        # Update UI on the main thread
+                        def update_ui_with_preview(dt):
+                            self.preview_area.clear_widgets()
+                            self.preview_image.source = preview_path
+                            self.preview_area.add_widget(self.preview_image)
+                        
+                        Clock.schedule_once(update_ui_with_preview, 0)
+                    else:
+                        # Update UI on the main thread if preview generation failed
+                        def show_error(dt):
+                            self.preview_label.text = "Failed to generate preview"
+                        
+                        Clock.schedule_once(show_error, 0)
+                        
+                except Exception as e:
+                    # Update UI on the main thread if there was an exception
+                    def show_exception(dt):
+                        self.preview_label.text = f"Error generating preview: {str(e)}"
+                    
+                    Clock.schedule_once(show_exception, 0)
+            
+            # Start the preview generation in a separate thread
+            import threading
+            preview_thread = threading.Thread(target=generate_preview_thread)
+            preview_thread.daemon = True
+            preview_thread.start()
+            
+        except Exception as e:
+            if hasattr(self, 'preview_label'):
+                self.preview_label.text = f"Error: {str(e)}"
     
     def generate_pdf(self, instance):
         """Generate the PDF file."""
@@ -138,11 +201,45 @@ class PDFPreviewScreen(Screen):
             # Generate PDF
             generate_calendar_pdf(self.current_view, self.current_date, output_path)
             
-            # Show success message
-            self.preview_label.text = f"PDF generated successfully!\nSaved to: {output_path}"
+            # Show success message with popup
+            from kivy.uix.popup import Popup
+            from kivy.uix.boxlayout import BoxLayout
+            from kivy.uix.button import Button
+            
+            content = BoxLayout(orientation='vertical', padding=dp(10))
+            content.add_widget(Label(text=f"PDF generated successfully!\nSaved to:\n{output_path}"))
+            
+            # Add button to open the output folder
+            def open_folder(instance):
+                import subprocess
+                import platform
+                
+                try:
+                    if platform.system() == "Windows":
+                        os.startfile(os.path.dirname(output_path))
+                    elif platform.system() == "Darwin":  # macOS
+                        subprocess.call(["open", os.path.dirname(output_path)])
+                    else:  # Linux
+                        subprocess.call(["xdg-open", os.path.dirname(output_path)])
+                except Exception as e:
+                    print(f"Error opening folder: {e}")
+                
+                popup.dismiss()
+            
+            button = Button(text="Open Folder", size_hint_y=None, height=dp(50))
+            button.bind(on_press=open_folder)
+            content.add_widget(button)
+            
+            popup = Popup(title="PDF Generated", content=content, size_hint=(0.8, 0.4))
+            popup.open()
             
         except Exception as e:
-            self.preview_label.text = f"Error generating PDF: {str(e)}"
+            # Show error message with popup
+            from kivy.uix.popup import Popup
+            
+            popup = Popup(title="Error", content=Label(text=f"Error generating PDF:\n{str(e)}"), 
+                          size_hint=(0.8, 0.4))
+            popup.open()
 
 class RemarkableAgendaApp(App):
     def __init__(self, **kwargs):
