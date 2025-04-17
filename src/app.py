@@ -1,45 +1,81 @@
 """
-Main application class for the reMarkable Agenda Generator.
+Main application module for reMarkable Agenda Generator.
 """
-import os
 from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.properties import ObjectProperty
+from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
+from kivy.core.window import Window
+from kivy.config import Config
+from kivy.utils import get_color_from_hex
+from kivy.resources import resource_add_path
+from kivy.clock import Clock
+import os
 
+# Import views
+from views.tablet_selection_view import TabletSelectionView
 from views.calendar_view import CalendarView
-from views.settings_view import SettingsView
 from views.pdf_preview_view import PDFPreviewView
+from views.settings_view import SettingsView
 
-class MainWindow(Screen):
-    """Main window container for the application."""
+# Set application properties
+Config.set('kivy', 'window_icon', 'assets/icon.png')
+Config.set('graphics', 'width', '1200')
+Config.set('graphics', 'height', '800')
+Config.set('input', 'mouse', 'mouse,multitouch_on_demand')
+
+# Add the assets directory to the resource path
+resource_add_path(os.path.join(os.path.dirname(__file__), 'assets'))
+
+class MainScreen(Screen):
+    """Main screen with navigation options."""
     pass
 
 class RemarkableAgendaApp(App):
     """Main application class for the reMarkable Agenda Generator."""
     
     def build(self):
-        """Build and return the root widget for the application."""
-        self.title = "reMarkable Agenda Generator"
+        """Build the application UI."""
+        # Set default window size
+        Window.size = (1200, 800)
         
-        # Create the screen manager
-        self.sm = ScreenManager()
+        # Initialize app state
+        self.tablet_model = None
+        self.current_date = None
+        self.view_type = 'month'
+        self.events = {}
+        self.weather = {}
+        self.tasks = []
         
-        # Add the main screen
-        main_screen = MainWindow(name='main')
-        self.sm.add_widget(main_screen)
+        # Initialize screen manager
+        self.screen_manager = ScreenManager(transition=SlideTransition())
         
-        # Add the settings screen
-        settings_screen = SettingsView(name='settings')
-        self.sm.add_widget(settings_screen)
+        # Add the tablet selection screen
+        tablet_screen = TabletSelectionView(name='tablet_selection')
+        self.screen_manager.add_widget(tablet_screen)
+        
+        # Add the calendar view screen
+        calendar_screen = CalendarView(name='calendar')
+        self.screen_manager.add_widget(calendar_screen)
         
         # Add the PDF preview screen
         pdf_preview_screen = PDFPreviewView(name='pdf_preview')
-        self.sm.add_widget(pdf_preview_screen)
+        self.screen_manager.add_widget(pdf_preview_screen)
         
-        return self.sm
+        # Set the tablet selection as the default screen
+        self.screen_manager.current = 'tablet_selection'
+        
+        return self.screen_manager
     
-    def get_application_config(self):
-        """Return the path to the configuration file."""
-        return super(RemarkableAgendaApp, self).get_application_config(
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), 'remarkable_agenda.ini'))
+    def set_tablet_model(self, model):
+        """Set the selected tablet model and move to calendar view."""
+        self.tablet_model = model
+        self.screen_manager.current = 'calendar'
+    
+    def show_pdf_preview(self, view_type, date):
+        """Show the PDF preview with the current settings."""
+        self.view_type = view_type
+        self.current_date = date
+        
+        # Update the PDF preview screen with current data
+        pdf_screen = self.screen_manager.get_screen('pdf_preview')
+        pdf_screen.set_view_data(view_type, date, self.tablet_model, self.events, self.weather, self.tasks)
+        self.screen_manager.current = 'pdf_preview'

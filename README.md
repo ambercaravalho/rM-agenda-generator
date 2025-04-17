@@ -68,29 +68,6 @@ Pre-built packages for Windows, macOS, and Linux will be available for download 
    pip install -r requirements.txt
    ```
 
-### Installing Kivy on macOS
-1. Open your terminal.
-2. Ensure you have Homebrew installed. If not, install it from [brew.sh](https://brew.sh/).
-3. Run the following command to install Kivy:
-   ```
-   brew install kivy
-   ```
-4. After installation, you can verify it by running the application.
-
-### Installing Kivy on Windows
-1. Open Command Prompt or PowerShell.
-2. Run the following command:
-   ```
-   pip install kivy
-   ```
-
-### Installing Kivy on Linux
-1. Open your terminal.
-2. Run the following commands:
-   ```
-   pip install kivy
-   ```
-
 ## Running the Application
 To run the application, navigate to the `src` directory and execute the `main.py` file:
 ```

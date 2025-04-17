@@ -4,12 +4,13 @@ PDF generator for creating calendar PDFs for reMarkable tablets.
 import os
 import calendar
 from datetime import datetime, timedelta
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, portrait
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from kivy.app import App
 
 class PDFGenerator:
     """PDF Generator for reMarkable calendar layouts."""
@@ -17,6 +18,13 @@ class PDFGenerator:
     def __init__(self):
         # Register fonts
         self._register_fonts()
+        
+        # Get the tablet model from the app
+        app = App.get_running_app()
+        self.tablet_model = app.tablet_model if hasattr(app, 'tablet_model') else "reMarkable 2"
+        
+        # Set page size and capabilities based on tablet model
+        self.page_size, self.supports_color = self._get_tablet_specs()
         
         # Initialize styles
         self.styles = getSampleStyleSheet()
@@ -36,6 +44,43 @@ class PDFGenerator:
             fontName='Helvetica',
             fontSize=8
         ))
+        self.styles.add(ParagraphStyle(
+            name='Heading2',
+            fontName='Helvetica-Bold',
+            fontSize=14,
+            spaceBefore=12,
+            spaceAfter=6
+        ))
+    
+    def _get_tablet_specs(self):
+        """
+        Get page size and color capabilities based on tablet model.
+        
+        Returns:
+            tuple: (page_size, supports_color)
+        """
+        # Default to reMarkable 2 specs if model is None
+        if not self.tablet_model:
+            self.tablet_model = "reMarkable 2"
+            
+        if self.tablet_model == "reMarkable 1":
+            # reMarkable 1: 1872×1404 pixels (226 DPI)
+            # Close to A5 in portrait orientation, monochrome
+            return portrait((595, 842)), False
+            
+        elif self.tablet_model == "reMarkable 2":
+            # reMarkable 2: 1872×1404 pixels (226 DPI) 
+            # Similar to A5 in portrait orientation, monochrome
+            return portrait((595, 842)), False
+            
+        elif self.tablet_model == "Paper Pro":
+            # reMarkable Paper Pro (assumed specs similar to reMarkable 2 but with color)
+            # Portrait orientation, with color support
+            return portrait((595, 842)), True
+            
+        else:
+            # Default to reMarkable 2 specs
+            return portrait((595, 842)), False
     
     def _register_fonts(self):
         """Register custom fonts for PDF generation."""
@@ -57,7 +102,7 @@ class PDFGenerator:
             str: Path to the generated PDF file
         """
         filename = os.path.join(output_path, f"monthly_calendar_{year}_{month:02d}.pdf")
-        doc = SimpleDocTemplate(filename, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+        doc = SimpleDocTemplate(filename, pagesize=self.page_size, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
         
         elements = []
         
@@ -91,8 +136,9 @@ class PDFGenerator:
                     week_data.append(day_text)
             cal_data.append(week_data)
         
-        # Create the calendar table
-        table = Table(cal_data, colWidths=[70] * 7, rowHeights=[30] + [80] * len(cal))
+        # Create the calendar table with adjusted cell width based on tablet model
+        col_width = (self.page_size[0] - 60) / 7  # Distribute available width among 7 columns
+        table = Table(cal_data, colWidths=[col_width] * 7, rowHeights=[30] + [80] * len(cal))
         
         # Style the table
         table_style = TableStyle([
@@ -100,18 +146,26 @@ class PDFGenerator:
             ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
             ('VALIGN', (0, 1), (-1, -1), 'TOP'),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 10),
-            ('FONT', (0, 1), (-1, -1), 'Helvetica', 9)
         ])
+        
+        # Add colors if the tablet supports it
+        if self.supports_color:
+            table_style.add('BACKGROUND', (0, 0), (-1, 0), colors.lightblue)
+            table_style.add('TEXTCOLOR', (0, 0), (-1, 0), colors.darkblue)
+        else:
+            table_style.add('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)
+            table_style.add('TEXTCOLOR', (0, 0), (-1, 0), colors.black)
+        
+        table_style.add('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 10)
+        table_style.add('FONT', (0, 1), (-1, -1), 'Helvetica', 9)
+        
         table.setStyle(table_style)
         
         elements.append(table)
         doc.build(elements)
         
         return filename
-    
+
     def generate_week_calendar(self, start_date, output_path, events=None, weather=None):
         """
         Generate a weekly calendar PDF.
@@ -132,7 +186,7 @@ class PDFGenerator:
             f"weekly_calendar_{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}.pdf"
         )
         
-        doc = SimpleDocTemplate(filename, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+        doc = SimpleDocTemplate(filename, pagesize=self.page_size, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
         elements = []
         
         # Title
@@ -150,17 +204,23 @@ class PDFGenerator:
         headers = ["Time", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         table_data.append(headers)
         
+        # Calculate cell widths based on the tablet page size
+        available_width = self.page_size[0] - 60  # account for margins
+        time_col_width = 40
+        day_col_width = (available_width - time_col_width) / 7
+        
         # Add date row
         current_date = start_date
         date_row = ["Date"]
         for _ in range(7):
             date_str = current_date.strftime("%d/%m")
             
-            # Add weather if available
+            # Add weather if available and tablet supports color
             if weather and current_date.strftime("%Y-%m-%d") in weather:
                 w = weather[current_date.strftime("%Y-%m-%d")]
                 if w:
-                    date_str += f"\n{w['condition']}\n{w['temperature']}°C"
+                    weather_text = f"\n{w['condition']}\n{w['temperature']}°C"
+                    date_str += weather_text
             
             date_row.append(date_str)
             current_date += timedelta(days=1)
@@ -189,8 +249,12 @@ class PDFGenerator:
             
             table_data.append(row)
         
-        # Create the table
-        table = Table(table_data, colWidths=[40] + [70] * 7, rowHeights=[30, 50] + [25] * (len(table_data) - 2))
+        # Create the table with adjusted widths based on tablet model
+        table = Table(
+            table_data, 
+            colWidths=[time_col_width] + [day_col_width] * 7, 
+            rowHeights=[30, 50] + [25] * (len(table_data) - 2)
+        )
         
         # Style the table
         table_style = TableStyle([
@@ -200,21 +264,31 @@ class PDFGenerator:
             ('VALIGN', (0, 0), (-1, 1), 'MIDDLE'),
             ('VALIGN', (0, 2), (-1, -1), 'TOP'),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('BACKGROUND', (0, 1), (-1, 1), colors.lightgrey),
-            ('BACKGROUND', (0, 1), (0, -1), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 10),
-            ('FONT', (0, 1), (0, -1), 'Helvetica-Bold', 9),
-            ('FONT', (1, 1), (-1, -1), 'Helvetica', 8)
         ])
+        
+        # Apply colors if the tablet supports them
+        if self.supports_color:
+            table_style.add('BACKGROUND', (0, 0), (-1, 0), colors.lightblue)
+            table_style.add('BACKGROUND', (0, 1), (-1, 1), colors.lightblue)
+            table_style.add('BACKGROUND', (0, 1), (0, -1), colors.lightblue)
+            table_style.add('TEXTCOLOR', (0, 0), (-1, 0), colors.darkblue)
+        else:
+            table_style.add('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)
+            table_style.add('BACKGROUND', (0, 1), (-1, 1), colors.lightgrey)
+            table_style.add('BACKGROUND', (0, 1), (0, -1), colors.lightgrey)
+            table_style.add('TEXTCOLOR', (0, 0), (-1, 0), colors.black)
+        
+        table_style.add('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 10)
+        table_style.add('FONT', (0, 1), (0, -1), 'Helvetica-Bold', 9)
+        table_style.add('FONT', (1, 1), (-1, -1), 'Helvetica', 8)
+        
         table.setStyle(table_style)
         
         elements.append(table)
         doc.build(elements)
         
         return filename
-    
+
     def generate_day_calendar(self, date, output_path, events=None, weather=None, tasks=None):
         """
         Generate a daily calendar PDF.
@@ -230,7 +304,7 @@ class PDFGenerator:
             str: Path to the generated PDF file
         """
         filename = os.path.join(output_path, f"daily_calendar_{date.strftime('%Y%m%d')}.pdf")
-        doc = SimpleDocTemplate(filename, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+        doc = SimpleDocTemplate(filename, pagesize=self.page_size, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
         
         elements = []
         
@@ -241,8 +315,12 @@ class PDFGenerator:
         
         # Weather section
         if weather:
+            weather_style = self.styles['Normal'].clone('WeatherStyle')
+            if self.supports_color:
+                weather_style.textColor = colors.darkblue
+            
             weather_str = f"Weather: {weather['condition']}, {weather['temperature']}°C"
-            weather_para = Paragraph(weather_str, self.styles['Normal'])
+            weather_para = Paragraph(weather_str, weather_style)
             elements.append(weather_para)
             elements.append(Spacer(1, 15))
         
@@ -252,6 +330,11 @@ class PDFGenerator:
         
         # Create a table for hourly schedule
         schedule_data = [["Time", "Event"]]
+        
+        # Calculate cell widths based on the tablet page size
+        available_width = self.page_size[0] - 60  # account for margins
+        time_col_width = 60
+        event_col_width = available_width - time_col_width
         
         # Add time slots for the day
         for hour in range(8, 21):  # 8 AM to 8 PM
@@ -269,7 +352,7 @@ class PDFGenerator:
             
             schedule_data.append([hour_str, event_text])
         
-        schedule_table = Table(schedule_data, colWidths=[60, 400])
+        schedule_table = Table(schedule_data, colWidths=[time_col_width, event_col_width])
         
         # Style the schedule table
         schedule_style = TableStyle([
@@ -277,12 +360,20 @@ class PDFGenerator:
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 10),
-            ('FONT', (0, 1), (0, -1), 'Helvetica-Bold', 9),
-            ('FONT', (1, 1), (1, -1), 'Helvetica', 10)
         ])
+        
+        # Apply colors if the tablet supports them
+        if self.supports_color:
+            schedule_style.add('BACKGROUND', (0, 0), (-1, 0), colors.lightblue)
+            schedule_style.add('TEXTCOLOR', (0, 0), (-1, 0), colors.darkblue)
+        else:
+            schedule_style.add('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey)
+            schedule_style.add('TEXTCOLOR', (0, 0), (-1, 0), colors.black)
+        
+        schedule_style.add('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 10)
+        schedule_style.add('FONT', (0, 1), (0, -1), 'Helvetica-Bold', 9)
+        schedule_style.add('FONT', (1, 1), (1, -1), 'Helvetica', 10)
+        
         schedule_table.setStyle(schedule_style)
         
         elements.append(schedule_table)
@@ -292,10 +383,12 @@ class PDFGenerator:
         elements.append(Paragraph("Tasks", self.styles['Heading2']))
         elements.append(Spacer(1, 10))
         
-        # Create a table for tasks
+        # Create a table for tasks with adjusted width based on tablet model
+        task_col_width = available_width - 20  # checkbox column is 20 points
+        
         if tasks and len(tasks) > 0:
             task_data = [["□", task] for task in tasks]
-            task_table = Table(task_data, colWidths=[20, 440])
+            task_table = Table(task_data, colWidths=[20, task_col_width])
             
             # Style the task table
             task_style = TableStyle([
@@ -312,7 +405,7 @@ class PDFGenerator:
         else:
             # Empty task list with checkbox placeholders
             empty_tasks = [["□", ""] for _ in range(10)]
-            empty_task_table = Table(empty_tasks, colWidths=[20, 440], rowHeights=[25] * 10)
+            empty_task_table = Table(empty_tasks, colWidths=[20, task_col_width], rowHeights=[25] * 10)
             
             # Style the empty task table
             empty_task_style = TableStyle([
@@ -331,9 +424,9 @@ class PDFGenerator:
         elements.append(Paragraph("Notes", self.styles['Heading2']))
         elements.append(Spacer(1, 10))
         
-        # Create a simple notes area (just a box)
+        # Create a notes area with proper width for the tablet
         notes_data = [[""]]
-        notes_table = Table(notes_data, colWidths=[460], rowHeights=[200])
+        notes_table = Table(notes_data, colWidths=[available_width], rowHeights=[200])
         
         # Style the notes table
         notes_style = TableStyle([
@@ -345,7 +438,7 @@ class PDFGenerator:
         doc.build(elements)
         
         return filename
-    
+        
     def _get_events_for_day(self, events, year, month, day):
         """Helper method to get events for a specific day."""
         date_key = f"{year:04d}-{month:02d}-{day:02d}"
