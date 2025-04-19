@@ -22,6 +22,8 @@ from kivy.uix.image import Image
 from kivy.metrics import dp
 from kivy.core.window import Window
 from kivy.clock import Clock
+from kivy.graphics import Color, Rectangle
+from kivy.uix.popup import Popup
 from kivymd.app import MDApp
 from datetime import datetime
 import tempfile
@@ -29,19 +31,32 @@ from utils.config_manager import ConfigManager
 from views.settings_view import SettingsView
 from utils.icon_helper import get_icon_button
 from utils.setup_helper import safe_navigate
+from utils.theme_manager import ThemeManager
 
 class TabletSelectionScreen(Screen):
     def __init__(self, **kwargs):
         super(TabletSelectionScreen, self).__init__(**kwargs)
+        
+        # Set background color for the screen
+        with self.canvas.before:
+            Color(*ThemeManager.COLORS['background'])
+            self.bg_rect = Rectangle(pos=self.pos, size=self.size)
+            self.bind(pos=self._update_bg_rect, size=self._update_bg_rect)
+        
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
         
         # Header with title and settings button
         header = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
-        title = Label(text="Select Your Device", font_size=dp(24), size_hint_x=1)
+        title = Label(
+            text="Select Your Device", 
+            font_size=dp(24), 
+            size_hint_x=1,
+            color=ThemeManager.COLORS['text_primary']
+        )
         
-        # Settings button
+        # Settings button using Material Design icon
         settings_button = get_icon_button(
-            'cog',
+            ThemeManager.get_icon('settings'),
             callback=self.open_settings,
             tooltip="Settings",
             size_hint=(None, None),
@@ -51,18 +66,28 @@ class TabletSelectionScreen(Screen):
         header.add_widget(title)
         header.add_widget(settings_button)
         
-        # Tablet options
+        # Instruction text with proper color
+        instruction_label = Label(
+            text="Please select your reMarkable tablet model:",
+            color=ThemeManager.COLORS['text_primary']
+        )
+        
+        # Tablet options in a card-like container
+        tablet_container = BoxLayout(padding=dp(10))
+        with tablet_container.canvas.before:
+            Color(*ThemeManager.COLORS['surface'])
+            self.tablet_rect = Rectangle(pos=tablet_container.pos, size=tablet_container.size)
+            tablet_container.bind(pos=self._update_tablet_rect, size=self._update_tablet_rect)
+        
         tablets_layout = BoxLayout(spacing=dp(20))
         
-        # reMarkable 1 button
+        # Device buttons with icons
         rm1_button = Button(text="reMarkable 1", size_hint_y=None, height=dp(100))
         rm1_button.bind(on_press=lambda x: app.select_tablet("reMarkable 1"))
         
-        # reMarkable 2 button
         rm2_button = Button(text="reMarkable 2", size_hint_y=None, height=dp(100))
         rm2_button.bind(on_press=lambda x: app.select_tablet("reMarkable 2"))
         
-        # PaperPro button
         rmpro_button = Button(text="Paper Pro", size_hint_y=None, height=dp(100))
         rmpro_button.bind(on_press=lambda x: app.select_tablet("Paper Pro"))
         
@@ -70,13 +95,26 @@ class TabletSelectionScreen(Screen):
         tablets_layout.add_widget(rm1_button)
         tablets_layout.add_widget(rm2_button)
         tablets_layout.add_widget(rmpro_button)
+        tablet_container.add_widget(tablets_layout)
         
         # Add widgets to main layout
         layout.add_widget(header)
-        layout.add_widget(Label(text="Please select your reMarkable tablet model:"))
-        layout.add_widget(tablets_layout)
+        layout.add_widget(instruction_label)
+        layout.add_widget(tablet_container)
         
         self.add_widget(layout)
+    
+    def _update_bg_rect(self, instance, value):
+        """Update the background rectangle position and size."""
+        if hasattr(self, 'bg_rect'):
+            self.bg_rect.pos = instance.pos
+            self.bg_rect.size = instance.size
+    
+    def _update_tablet_rect(self, instance, value):
+        """Update the tablet container rectangle."""
+        if hasattr(self, 'tablet_rect'):
+            self.tablet_rect.pos = instance.pos
+            self.tablet_rect.size = instance.size
     
     def open_settings(self, instance):
         """Navigate to settings screen."""
@@ -85,15 +123,26 @@ class TabletSelectionScreen(Screen):
 class PDFPreviewScreen(Screen):
     def __init__(self, **kwargs):
         super(PDFPreviewScreen, self).__init__(**kwargs)
+        
+        # Set background color for the screen
+        with self.canvas.before:
+            Color(*ThemeManager.COLORS['background'])
+            self.bg_rect = Rectangle(pos=self.pos, size=self.size)
+            self.bind(pos=self._update_bg_rect, size=self._update_bg_rect)
+            
         self.layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
         
         # Header with device info and settings button
         header = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
-        self.device_label = Label(text="Selected Tablet: None", size_hint_x=1)
+        self.device_label = Label(
+            text="Selected Tablet: None", 
+            size_hint_x=1,
+            color=ThemeManager.COLORS['text_primary']
+        )
         
-        # Settings button
+        # Settings button using Material Design icon
         settings_button = get_icon_button(
-            'cog',
+            ThemeManager.get_icon('settings'),
             callback=self.open_settings,
             tooltip="Settings",
             size_hint=(None, None),
@@ -106,6 +155,7 @@ class PDFPreviewScreen(Screen):
         # View type selection
         view_layout = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
         
+        # Use proper MDButtons for view selection if KivyMD is available
         month_button = Button(text="Month View")
         month_button.bind(on_press=lambda x: self.change_view('month'))
         
@@ -119,23 +169,41 @@ class PDFPreviewScreen(Screen):
         view_layout.add_widget(week_button)
         view_layout.add_widget(day_button)
         
-        # Preview area with image
+        # Preview area with image in a card-like container
+        preview_container = BoxLayout(padding=dp(10))
+        with preview_container.canvas.before:
+            Color(*ThemeManager.COLORS['surface'])
+            self.preview_rect = Rectangle(pos=preview_container.pos, size=preview_container.size)
+            preview_container.bind(pos=self._update_preview_rect, size=self._update_preview_rect)
+        
         self.preview_area = BoxLayout()
         self.preview_image = Image(allow_stretch=True, keep_ratio=True)
-        self.preview_label = Label(text="Loading preview...")
+        self.preview_label = Label(
+            text="Loading preview...",
+            color=ThemeManager.COLORS['text_primary']
+        )
         
-        self.preview_area.add_widget(self.preview_image)
+        self.preview_area.add_widget(self.preview_label)
+        preview_container.add_widget(self.preview_area)
         
-        # Generate button
-        generate_layout = BoxLayout(size_hint_y=None, height=dp(50))
-        generate_button = Button(text="Generate PDF")
-        generate_button.bind(on_press=self.generate_pdf)
+        # Generate button with icon
+        generate_layout = BoxLayout(size_hint_y=None, height=dp(50), padding=(0, dp(10)), spacing=dp(10))
+        
+        generate_button = get_icon_button(
+            ThemeManager.get_icon('pdf'),
+            callback=self.generate_pdf,
+            tooltip="Generate PDF",
+            text="Generate PDF",
+            size_hint=(None, None),
+            size=(dp(200), dp(50)),
+            pos_hint={'center_x': 0.5}
+        )
         generate_layout.add_widget(generate_button)
         
         # Add all widgets to main layout
         self.layout.add_widget(header)
         self.layout.add_widget(view_layout)
-        self.layout.add_widget(self.preview_area)
+        self.layout.add_widget(preview_container)
         self.layout.add_widget(generate_layout)
         
         self.add_widget(self.layout)
@@ -144,6 +212,18 @@ class PDFPreviewScreen(Screen):
         self.current_view = 'month'
         self.current_date = datetime.now()
         self.current_preview_path = None
+    
+    def _update_bg_rect(self, instance, value):
+        """Update the background rectangle position and size."""
+        if hasattr(self, 'bg_rect'):
+            self.bg_rect.pos = instance.pos
+            self.bg_rect.size = instance.size
+    
+    def _update_preview_rect(self, instance, value):
+        """Update the preview container rectangle."""
+        if hasattr(self, 'preview_rect'):
+            self.preview_rect.pos = instance.pos
+            self.preview_rect.size = instance.size
     
     def open_settings(self, instance):
         """Navigate to settings screen."""
@@ -178,10 +258,10 @@ class PDFPreviewScreen(Screen):
             from utils.pdf_generator import generate_preview_image
             
             # Show loading indicator
-            if hasattr(self, 'preview_label'):
-                self.preview_area.clear_widgets()
-                self.preview_area.add_widget(self.preview_label)
-                self.preview_label.text = "Generating preview..."
+            self.preview_area.clear_widgets()
+            self.preview_label.text = "Generating preview..."
+            self.preview_label.color = ThemeManager.COLORS['text_primary']
+            self.preview_area.add_widget(self.preview_label)
             
             # Generate the preview image in a separate thread to avoid blocking UI
             def generate_preview_thread():
@@ -202,6 +282,9 @@ class PDFPreviewScreen(Screen):
                         # Update UI on the main thread if preview generation failed
                         def show_error(dt):
                             self.preview_label.text = "Failed to generate preview"
+                            self.preview_label.color = ThemeManager.COLORS['error']
+                            self.preview_area.clear_widgets()
+                            self.preview_area.add_widget(self.preview_label)
                         
                         Clock.schedule_once(show_error, 0)
                         
@@ -209,6 +292,9 @@ class PDFPreviewScreen(Screen):
                     # Update UI on the main thread if there was an exception
                     def show_exception(dt):
                         self.preview_label.text = f"Error generating preview: {str(e)}"
+                        self.preview_label.color = ThemeManager.COLORS['error']
+                        self.preview_area.clear_widgets()
+                        self.preview_area.add_widget(self.preview_label)
                     
                     Clock.schedule_once(show_exception, 0)
             
@@ -219,8 +305,10 @@ class PDFPreviewScreen(Screen):
             preview_thread.start()
             
         except Exception as e:
-            if hasattr(self, 'preview_label'):
-                self.preview_label.text = f"Error: {str(e)}"
+            self.preview_label.text = f"Error: {str(e)}"
+            self.preview_label.color = ThemeManager.COLORS['error']
+            self.preview_area.clear_widgets()
+            self.preview_area.add_widget(self.preview_label)
     
     def generate_pdf(self, instance):
         """Generate the PDF file."""
@@ -236,51 +324,116 @@ class PDFPreviewScreen(Screen):
             output_path = os.path.join(output_dir, f"calendar_{self.current_date.strftime('%Y-%m-%d')}.pdf")
             
             # Get the current app for device information
+            app = MDApp.get_running_app()
             supports_color = app.supports_color
             dimensions = app.dimensions
             
-            # Generate PDF
-            generate_calendar_pdf(self.current_view, self.current_date, output_path)
-            
-            # Show success message with popup
-            from kivy.uix.popup import Popup
-            from kivy.uix.boxlayout import BoxLayout
-            from kivy.uix.button import Button
-            
+            # Show generating popup
             content = BoxLayout(orientation='vertical', padding=dp(10))
-            content.add_widget(Label(text=f"PDF generated successfully!\nSaved to:\n{output_path}"))
+            content.add_widget(Label(
+                text="Generating PDF...",
+                color=ThemeManager.COLORS['text_primary']
+            ))
+            generating_popup = Popup(
+                title='Please Wait',
+                content=content,
+                size_hint=(None, None),
+                size=(dp(300), dp(150)),
+                auto_dismiss=False
+            )
+            generating_popup.open()
             
-            # Add button to open the output folder
-            def open_folder(instance):
-                import subprocess
-                import platform
-                
+            def generate_in_thread():
                 try:
-                    if platform.system() == "Windows":
-                        os.startfile(os.path.dirname(output_path))
-                    elif platform.system() == "Darwin":  # macOS
-                        subprocess.call(["open", os.path.dirname(output_path)])
-                    else:  # Linux
-                        subprocess.call(["xdg-open", os.path.dirname(output_path)])
+                    # Generate PDF
+                    generate_calendar_pdf(self.current_view, self.current_date, output_path)
+                    
+                    # Dismiss generating popup and show success message
+                    Clock.schedule_once(lambda dt: self._show_pdf_success(generating_popup, output_path), 0)
                 except Exception as e:
-                    print(f"Error opening folder: {e}")
-                
-                popup.dismiss()
+                    # Dismiss generating popup and show error message
+                    def show_error(dt):
+                        generating_popup.dismiss()
+                        error_popup = Popup(
+                            title='Error',
+                            content=Label(
+                                text=f"Error generating PDF:\n{str(e)}",
+                                color=ThemeManager.COLORS['error']
+                            ),
+                            size_hint=(None, None),
+                            size=(dp(400), dp(200))
+                        )
+                        error_popup.open()
+                    Clock.schedule_once(show_error, 0)
             
-            button = Button(text="Open Folder", size_hint_y=None, height=dp(50))
-            button.bind(on_press=open_folder)
-            content.add_widget(button)
-            
-            popup = Popup(title="PDF Generated", content=content, size_hint=(0.8, 0.4))
-            popup.open()
+            # Start generation in a separate thread
+            import threading
+            generation_thread = threading.Thread(target=generate_in_thread)
+            generation_thread.daemon = True
+            generation_thread.start()
             
         except Exception as e:
             # Show error message with popup
             from kivy.uix.popup import Popup
             
-            popup = Popup(title="Error", content=Label(text=f"Error generating PDF:\n{str(e)}"), 
-                          size_hint=(0.8, 0.4))
+            popup = Popup(
+                title='Error',
+                content=Label(
+                    text=f"Error generating PDF:\n{str(e)}",
+                    color=ThemeManager.COLORS['error']
+                ), 
+                size_hint=(None, None),
+                size=(dp(400), dp(200))
+            )
             popup.open()
+    
+    def _show_pdf_success(self, generating_popup, output_path):
+        """Show success message after PDF generation."""
+        generating_popup.dismiss()
+        
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        
+        content = BoxLayout(orientation='vertical', padding=dp(10))
+        content.add_widget(Label(
+            text=f"PDF generated successfully!\nSaved to:\n{output_path}",
+            color=ThemeManager.COLORS['text_primary']
+        ))
+        
+        # Add button to open the output folder
+        def open_folder(instance):
+            import subprocess
+            import platform
+            
+            try:
+                if platform.system() == "Windows":
+                    os.startfile(os.path.dirname(output_path))
+                elif platform.system() == "Darwin":  # macOS
+                    subprocess.call(["open", os.path.dirname(output_path)])
+                else:  # Linux
+                    subprocess.call(["xdg-open", os.path.dirname(output_path)])
+            except Exception as e:
+                print(f"Error opening folder: {e}")
+            
+            popup.dismiss()
+        
+        button = Button(
+            text="Open Folder",
+            size_hint_y=None,
+            height=dp(50),
+            background_color=ThemeManager.COLORS['primary']
+        )
+        button.bind(on_press=open_folder)
+        content.add_widget(button)
+        
+        popup = Popup(
+            title="PDF Generated",
+            content=content,
+            size_hint=(None, None),
+            size=(dp(400), dp(250))
+        )
+        popup.open()
 
 class RemarkableAgendaApp(MDApp):
     def __init__(self, **kwargs):
@@ -304,6 +457,9 @@ class RemarkableAgendaApp(MDApp):
         self.has_completed_setup = bool(self.selected_tablet)
     
     def build(self):
+        # Apply theme settings
+        ThemeManager.apply_theme_to_app(self)
+        
         # Create screen manager with slide transition for settings
         self.screen_manager = ScreenManager(transition=SlideTransition())
         

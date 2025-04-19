@@ -10,7 +10,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.togglebutton import ToggleButton
 from kivy.metrics import dp
-from kivy.app import App
+from kivymd.app import MDApp
 from kivy.graphics import Color, Rectangle
 from functools import partial
 from kivy.uix.popup import Popup
@@ -29,6 +29,12 @@ class SettingsView(Screen):
         self.settings_inputs = {}
         self.config_manager = ConfigManager()
         
+        # Set background color for the screen
+        with self.canvas.before:
+            Color(*ThemeManager.COLORS['background'])
+            self.bg_rect = Rectangle(pos=self.pos, size=self.size)
+            self.bind(pos=self._update_bg_rect, size=self._update_bg_rect)
+        
         # Create the main layout
         main_layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
         
@@ -37,7 +43,7 @@ class SettingsView(Screen):
         
         # Back button with icon
         back_button = get_icon_button(
-            'arrow-left',
+            ThemeManager.get_icon('back'),
             callback=self.go_back,
             tooltip="Back to Dashboard",
             size_hint=(None, None),
@@ -49,7 +55,8 @@ class SettingsView(Screen):
             text="Settings",
             font_size=dp(24),
             bold=True,
-            size_hint_x=1
+            size_hint_x=1,
+            color=ThemeManager.COLORS['text_primary']
         )
         
         top_bar.add_widget(back_button)
@@ -58,8 +65,14 @@ class SettingsView(Screen):
         # Create scrollable content for settings
         scroll_view = ScrollView()
         settings_container = BoxLayout(orientation='vertical', spacing=dp(20), 
-                                      size_hint_y=None)
+                                      size_hint_y=None, padding=(0, 0, 0, dp(20)))
         settings_container.bind(minimum_height=settings_container.setter('height'))
+        
+        # Set a background color for the settings container
+        with settings_container.canvas.before:
+            Color(*ThemeManager.COLORS['surface'])
+            self.container_rect = Rectangle(pos=settings_container.pos, size=settings_container.size)
+            settings_container.bind(pos=self._update_container_rect, size=self._update_container_rect)
         
         # Add the settings sections
         self._create_weather_settings(settings_container)
@@ -69,7 +82,7 @@ class SettingsView(Screen):
         
         # Add a Save Settings button at the bottom
         save_button = get_icon_button(
-            'content-save',
+            ThemeManager.get_icon('save'),
             callback=self.save_settings,
             tooltip="Save Settings",
             text="Save Settings",
@@ -85,10 +98,22 @@ class SettingsView(Screen):
         main_layout.add_widget(save_button)
         self.add_widget(main_layout)
     
+    def _update_bg_rect(self, instance, value):
+        """Update the background rectangle position and size."""
+        if hasattr(self, 'bg_rect'):
+            self.bg_rect.pos = instance.pos
+            self.bg_rect.size = instance.size
+    
+    def _update_container_rect(self, instance, value):
+        """Update the container rectangle position and size."""
+        if hasattr(self, 'container_rect'):
+            self.container_rect.pos = instance.pos
+            self.container_rect.size = instance.size
+    
     def go_back(self, instance):
         """Return to the main screen."""
-        app = App.get_running_app()
-        safe_navigate('pdf_preview' if app.has_completed_setup else 'main', transition_direction='right')
+        app = MDApp.get_running_app()
+        safe_navigate('pdf_preview' if app.has_completed_setup else 'tablet_selection', transition_direction='right')
     
     def _create_section_header(self, title):
         """Create a section header with a title."""
@@ -125,7 +150,7 @@ class SettingsView(Screen):
         weather_grid = GridLayout(cols=2, spacing=dp(10), size_hint_y=None, height=dp(120))
         
         # API Key
-        weather_grid.add_widget(Label(text="OpenWeatherMap API Key:", halign='right'))
+        weather_grid.add_widget(Label(text="OpenWeatherMap API Key:", halign='right', color=ThemeManager.COLORS['text_primary']))
         weather_api_key = TextInput(
             multiline=False,
             hint_text="Enter your API key",
@@ -136,7 +161,7 @@ class SettingsView(Screen):
         weather_grid.add_widget(weather_api_key)
         
         # Location
-        weather_grid.add_widget(Label(text="Location (city name):", halign='right'))
+        weather_grid.add_widget(Label(text="Location (city name):", halign='right', color=ThemeManager.COLORS['text_primary']))
         weather_location = TextInput(
             multiline=False,
             hint_text="e.g., London,UK",
@@ -154,7 +179,8 @@ class SettingsView(Screen):
             italic=True,
             font_size=dp(12),
             size_hint_y=None,
-            height=dp(30)
+            height=dp(30),
+            color=ThemeManager.COLORS['text_secondary']
         )
         parent.add_widget(info_text)
     
@@ -181,7 +207,7 @@ class SettingsView(Screen):
         self.settings_inputs['new_calendar_name'] = name_input
         
         add_button = get_icon_button(
-            'plus',
+            ThemeManager.get_icon('add'),
             callback=self.add_calendar,
             tooltip="Add Calendar",
             size_hint_x=None,
@@ -213,7 +239,7 @@ class SettingsView(Screen):
         device_grid = GridLayout(cols=2, spacing=dp(10), size_hint_y=None, height=dp(120))
         
         # Device name
-        device_grid.add_widget(Label(text="Device Name:", halign='right'))
+        device_grid.add_widget(Label(text="Device Name:", halign='right', color=ThemeManager.COLORS['text_primary']))
         device_name = TextInput(
             multiline=False,
             hint_text="My reMarkable",
@@ -224,7 +250,7 @@ class SettingsView(Screen):
         device_grid.add_widget(device_name)
         
         # Device type selection
-        device_grid.add_widget(Label(text="Device Type:", halign='right'))
+        device_grid.add_widget(Label(text="Device Type:", halign='right', color=ThemeManager.COLORS['text_primary']))
         device_type_layout = BoxLayout(spacing=dp(10))
         
         # Get current device type
@@ -269,7 +295,7 @@ class SettingsView(Screen):
         display_grid = GridLayout(cols=2, spacing=dp(10), size_hint_y=None, height=dp(120))
         
         # Time format setting (24-hour vs 12-hour)
-        display_grid.add_widget(Label(text="Time Format:", halign='right'))
+        display_grid.add_widget(Label(text="Time Format:", halign='right', color=ThemeManager.COLORS['text_primary']))
         time_format_layout = BoxLayout(spacing=dp(10))
         
         # Get current time format setting
@@ -298,7 +324,7 @@ class SettingsView(Screen):
         display_grid.add_widget(time_format_layout)
         
         # Week start setting (Monday vs Sunday)
-        display_grid.add_widget(Label(text="Week Starts On:", halign='right'))
+        display_grid.add_widget(Label(text="Week Starts On:", halign='right', color=ThemeManager.COLORS['text_primary']))
         week_start_layout = BoxLayout(spacing=dp(10))
         
         # Get current week start setting
@@ -345,7 +371,8 @@ class SettingsView(Screen):
                 text="No calendars added yet",
                 italic=True,
                 size_hint_y=None,
-                height=dp(40)
+                height=dp(40),
+                color=ThemeManager.COLORS['text_secondary']
             ))
             return
             
@@ -355,11 +382,11 @@ class SettingsView(Screen):
             
             # Calendar name/URL display
             cal_text = f"{calendar['name']}: {calendar['url']}"
-            cal_label = Label(text=cal_text, halign='left', text_size=(None, None))
+            cal_label = Label(text=cal_text, halign='left', text_size=(None, None), color=ThemeManager.COLORS['text_primary'])
             
             # Remove button with icon
             remove_btn = get_icon_button(
-                'close',
+                ThemeManager.get_icon('remove'),
                 callback=partial(self.remove_calendar, calendar['url']),
                 tooltip="Remove Calendar",
                 size_hint_x=None,
@@ -470,14 +497,14 @@ class SettingsView(Screen):
                 self._loading_popup = None
             
             # Notify the app that settings have changed
-            app = App.get_running_app()
+            app = MDApp.get_running_app()
             if hasattr(app, 'on_settings_changed'):
                 app.on_settings_changed()
             
             # Show a popup confirmation
             popup = Popup(
                 title='Settings Saved',
-                content=Label(text='Your settings have been saved.'),
+                content=Label(text='Your settings have been saved.', color=ThemeManager.COLORS['text_primary']),
                 size_hint=(None, None),
                 size=(dp(300), dp(150))
             )
@@ -495,7 +522,7 @@ class SettingsView(Screen):
     def _show_loading_popup(self, message="Loading..."):
         """Show a loading popup."""
         content = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
-        content.add_widget(Label(text=message))
+        content.add_widget(Label(text=message, color=ThemeManager.COLORS['text_primary']))
         
         # Create and store the popup
         self._loading_popup = Popup(
@@ -511,7 +538,7 @@ class SettingsView(Screen):
         """Show an error popup."""
         popup = Popup(
             title='Error',
-            content=Label(text=message),
+            content=Label(text=message, color=ThemeManager.COLORS['text_primary']),
             size_hint=(None, None),
             size=(dp(400), dp(200))
         )

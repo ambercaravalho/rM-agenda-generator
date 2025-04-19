@@ -3,21 +3,24 @@ Theme manager for the reMarkable Agenda Generator.
 Manages colors, fonts, and sizes across the application.
 """
 from kivy.metrics import dp
+from kivy.utils import get_color_from_hex
 
 class ThemeManager:
     """Static class to manage app theme settings."""
     
-    # App color palette
+    # App color palette (using hex values for better compatibility)
     COLORS = {
-        'primary': (0.2, 0.6, 0.9),  # Blue
-        'primary_light': (0.4, 0.7, 0.95),  # Light blue
-        'accent': (0.95, 0.6, 0.1),  # Orange
-        'background': (0.95, 0.95, 0.95),  # Light gray
-        'surface': (1, 1, 1),  # White
-        'error': (0.9, 0.2, 0.2),  # Red
-        'text_primary': (0.1, 0.1, 0.1),  # Almost black
-        'text_secondary': (0.4, 0.4, 0.4),  # Dark gray
-        'divider': (0.8, 0.8, 0.8),  # Gray
+        'primary': get_color_from_hex('#3388DD'),  # Blue
+        'primary_light': get_color_from_hex('#66AAEE'),  # Light blue
+        'accent': get_color_from_hex('#FF9933'),  # Orange
+        'background': get_color_from_hex('#F5F5F5'),  # Light gray
+        'surface': get_color_from_hex('#FFFFFF'),  # White
+        'error': get_color_from_hex('#E53935'),  # Red
+        'text_primary': get_color_from_hex('#212121'),  # Almost black
+        'text_secondary': get_color_from_hex('#757575'),  # Dark gray
+        'divider': get_color_from_hex('#BDBDBD'),  # Gray
+        'card': get_color_from_hex('#FFFFFF'),  # White for cards
+        'disabled': get_color_from_hex('#BDBDBD'),  # Gray for disabled elements
     }
     
     # Font sizes
@@ -32,6 +35,24 @@ class ThemeManager:
         'button': dp(14),
     }
     
+    # Material Design icon names for common actions
+    ICONS = {
+        'back': 'arrow-left',
+        'settings': 'cog',
+        'save': 'content-save',
+        'add': 'plus',
+        'remove': 'close',
+        'edit': 'pencil',
+        'menu': 'menu',
+        'close': 'close',
+        'refresh': 'refresh',
+        'calendar': 'calendar',
+        'time': 'clock-outline',
+        'device': 'tablet',
+        'weather': 'weather-partly-cloudy',
+        'pdf': 'file-pdf-box',
+    }
+    
     @staticmethod
     def get_color_rgba(color_name, alpha=1.0):
         """Get color with alpha."""
@@ -43,5 +64,26 @@ class ThemeManager:
     @staticmethod
     def apply_theme_to_app(app):
         """Apply theme settings to the app."""
-        # This method can be expanded to apply theme settings to the app
-        pass
+        # Apply theme to MDApp
+        if hasattr(app, 'theme_cls'):
+            # Instead of directly setting primary_color and accent_color which are readonly,
+            # we use the appropriate KivyMD methods to set the theme colors
+            
+            # Set theme mode (light or dark)
+            app.theme_cls.theme_style = 'Light'  # Use light theme by default
+            
+            # Use standard KivyMD color palettes
+            # KivyMD uses predefined color palettes rather than custom RGB values
+            app.theme_cls.primary_palette = 'Blue'  # Closest match to our blue
+            app.theme_cls.accent_palette = 'Orange'  # Closest match to our orange
+            
+            # Optionally set hue if needed
+            app.theme_cls.primary_hue = '500'  # Default material design shade
+            app.theme_cls.accent_hue = '500'  # Default material design shade
+    
+    @staticmethod
+    def get_icon(icon_name):
+        """Get the appropriate icon name from the icons dictionary."""
+        if icon_name in ThemeManager.ICONS:
+            return ThemeManager.ICONS[icon_name]
+        return icon_name  # Return the original name if not found
