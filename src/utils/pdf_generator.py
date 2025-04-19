@@ -12,6 +12,7 @@ from reportlab.lib import colors
 from reportlab.graphics import renderPM
 from reportlab.graphics.shapes import Drawing
 from PIL import Image, ImageDraw, ImageFont
+from kivymd.app import MDApp
 import io
 
 def generate_calendar_pdf(view_type, date, output_path, for_preview=False):
@@ -24,27 +25,33 @@ def generate_calendar_pdf(view_type, date, output_path, for_preview=False):
         output_path (str): Path to save the PDF
         for_preview (bool): If True, generates a PDF optimized for preview
     """
+    # Get application settings
+    app = MDApp.get_running_app()
+    use_24h_time = getattr(app, 'use_24h_time', False)
+    monday_first = getattr(app, 'monday_first', False)
+    
     # Create the PDF with A5 size (reMarkable tablet dimensions)
     dimensions = (1404, 1872)  # reMarkable default dimensions (portrait)
     c = canvas.Canvas(output_path, pagesize=dimensions)
     
     # Set some defaults
-    supports_color = False  # reMarkable tablets are typically grayscale
+    supports_color = getattr(app, 'supports_color', False)
     
     # Draw header
     c.setFont("Helvetica-Bold", 24)
     if view_type == 'month':
         title = f"{date.strftime('%B %Y')}"
-        _draw_month_view(c, date, supports_color, dimensions)
+        _draw_month_view(c, date, supports_color, dimensions, monday_first)
     elif view_type == 'week':
-        # Find the first day of the week (Monday) for the given date
-        start_of_week = date - timedelta(days=date.weekday())
+        # Find the first day of the week (Monday or Sunday) for the given date
+        first_day_offset = date.weekday() if monday_first else (date.weekday() + 1) % 7
+        start_of_week = date - timedelta(days=first_day_offset)
         end_of_week = start_of_week + timedelta(days=6)
         title = f"Week of {start_of_week.strftime('%b %d')} - {end_of_week.strftime('%b %d, %Y')}"
-        _draw_week_view(c, date, supports_color, dimensions)
+        _draw_week_view(c, date, supports_color, dimensions, monday_first, use_24h_time)
     elif view_type == 'day':
         title = f"{date.strftime('%A, %B %d, %Y')}"
-        _draw_day_view(c, date, supports_color, dimensions)
+        _draw_day_view(c, date, supports_color, dimensions, use_24h_time)
     else:
         title = "Calendar"
     
@@ -67,6 +74,11 @@ def generate_preview_image(view_type, date, dpi=100):
     Returns:
         str: Path to the generated preview image
     """
+    # Get application settings
+    app = MDApp.get_running_app()
+    use_24h_time = getattr(app, 'use_24h_time', False) 
+    monday_first = getattr(app, 'monday_first', False)
+    
     # Create a temporary image file
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_img:
         temp_img_path = tmp_img.name
@@ -97,17 +109,19 @@ def generate_preview_image(view_type, date, dpi=100):
         if view_type == 'month':
             title = f"{date.strftime('%B %Y')}"
             draw.text((30, 30), title, fill='black', font=font_title)
-            _draw_month_view_image(draw, date, width, height, font_regular, font_bold)
+            _draw_month_view_image(draw, date, width, height, font_regular, font_bold, monday_first)
         elif view_type == 'week':
-            start_of_week = date - timedelta(days=date.weekday())
+            # Adjust start of week based on settings
+            first_day_offset = date.weekday() if monday_first else (date.weekday() + 1) % 7
+            start_of_week = date - timedelta(days=first_day_offset)
             end_of_week = start_of_week + timedelta(days=6)
             title = f"Week of {start_of_week.strftime('%b %d')} - {end_of_week.strftime('%b %d, %Y')}"
             draw.text((30, 30), title, fill='black', font=font_title)
-            _draw_week_view_image(draw, date, width, height, font_regular, font_bold)
+            _draw_week_view_image(draw, date, width, height, font_regular, font_bold, monday_first, use_24h_time)
         elif view_type == 'day':
             title = f"{date.strftime('%A, %B %d, %Y')}"
             draw.text((30, 30), title, fill='black', font=font_title)
-            _draw_day_view_image(draw, date, width, height, font_regular, font_bold)
+            _draw_day_view_image(draw, date, width, height, font_regular, font_bold, use_24h_time)
         
         # Save the image
         image.save(temp_img_path)
@@ -119,10 +133,40 @@ def generate_preview_image(view_type, date, dpi=100):
     
     return temp_img_path
 
-def _draw_month_view_image(draw, date, width, height, font_regular, font_bold):
+def _format_time(hour, use_24h=False):
+    """Format hour based on 24-hour or 12-hour preference."""
+    if use_24h:
+        return f"{hour:02d}:00"
+    else:
+        meridian = "AM" if hour < 12 else "PM"
+        display_hour = hour if hour <= 12 else hour - 12
+        if display_hour == 0:
+            display_hour = 12
+        return f"{display_hour} {meridian}"
+
+def _get_weekday_names(monday_first=False):
+    """Get weekday names in the correct order based on settings."""
+    if monday_first:
+        return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    else:
+        return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+def _draw_month_view_image(draw, date, width, height, font_regular, font_bold, monday_first=False):
     """Draw a month view calendar on a PIL Image."""
     # Get calendar for the current month
     cal = calendar.monthcalendar(date.year, date.month)
+    
+    # Adjust calendar if week starts on Sunday
+    if not monday_first:
+        # Create a new calendar with Sunday as first day
+        cal_sunday_first = []
+        for week in cal:
+            # Shift days: [Mon, Tue, Wed, Thu, Fri, Sat, Sun] -> [Sun, Mon, Tue, Wed, Thu, Fri, Sat]
+            new_week = [0] + week[:-1] if len(week) == 7 else [0] * 7
+            if week[6] != 0:  # If Sunday has a value
+                new_week[0] = week[6]  # Move Sunday to the first position
+            cal_sunday_first.append(new_week)
+        cal = cal_sunday_first
     
     # Define grid parameters
     margin = 20
@@ -130,8 +174,8 @@ def _draw_month_view_image(draw, date, width, height, font_regular, font_bold):
     cell_width = (width - 2 * margin) / 7
     cell_height = 40
     
-    # Draw weekday headers
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    # Draw weekday headers in the correct order
+    days = _get_weekday_names(monday_first)
     for i, day in enumerate(days):
         x = margin + i * cell_width
         draw.text((x + 5, grid_top), day, fill='black', font=font_bold)
@@ -168,10 +212,11 @@ def _draw_month_view_image(draw, date, width, height, font_regular, font_bold):
                     # Redraw the text
                     draw.text((x + 5, y + 5), day_str, fill='black', font=font_regular)
 
-def _draw_week_view_image(draw, date, width, height, font_regular, font_bold):
+def _draw_week_view_image(draw, date, width, height, font_regular, font_bold, monday_first=False, use_24h=False):
     """Draw a week view calendar on a PIL Image."""
-    # Find the first day of the week (Monday)
-    start_date = date - timedelta(days=date.weekday())
+    # Find the first day of the week (Monday or Sunday based on settings)
+    first_day_offset = date.weekday() if monday_first else (date.weekday() + 1) % 7
+    start_date = date - timedelta(days=first_day_offset)
     
     # Define grid parameters
     margin = 20
@@ -205,7 +250,7 @@ def _draw_week_view_image(draw, date, width, height, font_regular, font_bold):
             # Redraw the text
             draw.text((margin, y), day_text, fill='black', font=font_bold)
 
-def _draw_day_view_image(draw, date, width, height, font_regular, font_bold):
+def _draw_day_view_image(draw, date, width, height, font_regular, font_bold, use_24h=False):
     """Draw a day view calendar on a PIL Image."""
     # Define grid parameters
     margin = 20
@@ -220,13 +265,8 @@ def _draw_day_view_image(draw, date, width, height, font_regular, font_bold):
     for hour in range(9, 22):
         y = grid_top + 25 + ((hour - 9) * hour_height)
         
-        # Draw hour label
-        meridian = "AM" if hour < 12 else "PM"
-        display_hour = hour if hour <= 12 else hour - 12
-        if display_hour == 0:
-            display_hour = 12
-            
-        time_text = f"{display_hour} {meridian}"
+        # Draw hour label using user's preferred time format
+        time_text = _format_time(hour, use_24h)
         draw.text((margin, y), time_text, fill='black', font=font_bold)
         
         # Draw hour line
@@ -243,10 +283,22 @@ def _draw_day_view_image(draw, date, width, height, font_regular, font_bold):
     draw.text((margin, notes_y), "Notes:", fill='black', font=font_bold)
     draw.line([(margin, notes_y + 15), (width - margin, notes_y + 15)], fill='black')
 
-def _draw_month_view(c, date, supports_color, dimensions):
+def _draw_month_view(c, date, supports_color, dimensions, monday_first=False):
     """Draw a month view calendar."""
     # Get calendar for the current month
     cal = calendar.monthcalendar(date.year, date.month)
+    
+    # Adjust calendar if week starts on Sunday
+    if not monday_first:
+        # Create a new calendar with Sunday as first day
+        cal_sunday_first = []
+        for week in cal:
+            # Shift days: [Mon, Tue, Wed, Thu, Fri, Sat, Sun] -> [Sun, Mon, Tue, Wed, Thu, Fri, Sat]
+            new_week = [0] + week[:-1] if len(week) == 7 else [0] * 7
+            if week[6] != 0:  # If Sunday has a value
+                new_week[0] = week[6]  # Move Sunday to the first position
+            cal_sunday_first.append(new_week)
+        cal = cal_sunday_first
     
     # Define grid parameters
     width, height = dimensions
@@ -255,9 +307,9 @@ def _draw_month_view(c, date, supports_color, dimensions):
     cell_width = (width - 2 * margin) / 7
     cell_height = 100
     
-    # Draw weekday headers
+    # Draw weekday headers in the correct order
     c.setFont("Helvetica-Bold", 12)
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    days = _get_weekday_names(monday_first)
     for i, day in enumerate(days):
         x = margin + i * cell_width
         c.drawString(x + 10, grid_top - 20, day)
@@ -283,10 +335,11 @@ def _draw_month_view(c, date, supports_color, dimensions):
                     c.setFillColor(colors.black)
                     c.drawString(x + 10, y + cell_height - 20, str(day))
 
-def _draw_week_view(c, date, supports_color, dimensions):
+def _draw_week_view(c, date, supports_color, dimensions, monday_first=False, use_24h=False):
     """Draw a week view calendar."""
-    # Find the first day of the week (Monday)
-    start_date = date - timedelta(days=date.weekday())
+    # Find the first day of the week based on settings
+    first_day_offset = date.weekday() if monday_first else (date.weekday() + 1) % 7
+    start_date = date - timedelta(days=first_day_offset)
     
     # Define grid parameters
     width, height = dimensions
@@ -319,7 +372,7 @@ def _draw_week_view(c, date, supports_color, dimensions):
             c.drawString(margin, y, f"{day_name}, {day_date}")
             c.setFont("Helvetica", 12)
 
-def _draw_day_view(c, date, supports_color, dimensions):
+def _draw_day_view(c, date, supports_color, dimensions, use_24h=False):
     """Draw a day view calendar."""
     # Define grid parameters
     width, height = dimensions
@@ -336,14 +389,10 @@ def _draw_day_view(c, date, supports_color, dimensions):
     for hour in range(9, 22):
         y = grid_top - (hour - 8) * hour_height
         
-        # Draw hour label
-        meridian = "AM" if hour < 12 else "PM"
-        display_hour = hour if hour <= 12 else hour - 12
-        if display_hour == 0:
-            display_hour = 12
-            
+        # Draw hour label using user's preferred time format
         c.setFont("Helvetica-Bold", 12)
-        c.drawString(margin, y, f"{display_hour} {meridian}")
+        time_text = _format_time(hour, use_24h)
+        c.drawString(margin, y, time_text)
         
         # Draw hour line
         c.line(margin + 60, y, width - margin, y)

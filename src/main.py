@@ -14,8 +14,7 @@ Config.set('graphics', 'minimum_height', '600')
 Config.set('graphics', 'resizable', '1')
 
 # Import Kivy dependencies
-from kivy.app import App
-from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition
+from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition, SlideTransition
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
@@ -23,16 +22,34 @@ from kivy.uix.image import Image
 from kivy.metrics import dp
 from kivy.core.window import Window
 from kivy.clock import Clock
+from kivymd.app import MDApp
 from datetime import datetime
 import tempfile
+from utils.config_manager import ConfigManager
+from views.settings_view import SettingsView
+from utils.icon_helper import get_icon_button
+from utils.setup_helper import safe_navigate
 
 class TabletSelectionScreen(Screen):
     def __init__(self, **kwargs):
         super(TabletSelectionScreen, self).__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
         
-        # Title
-        title = Label(text="Select Your Device", font_size=dp(24), size_hint_y=None, height=dp(50))
+        # Header with title and settings button
+        header = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
+        title = Label(text="Select Your Device", font_size=dp(24), size_hint_x=1)
+        
+        # Settings button
+        settings_button = get_icon_button(
+            'cog',
+            callback=self.open_settings,
+            tooltip="Settings",
+            size_hint=(None, None),
+            size=(dp(40), dp(40))
+        )
+        
+        header.add_widget(title)
+        header.add_widget(settings_button)
         
         # Tablet options
         tablets_layout = BoxLayout(spacing=dp(20))
@@ -45,26 +62,46 @@ class TabletSelectionScreen(Screen):
         rm2_button = Button(text="reMarkable 2", size_hint_y=None, height=dp(100))
         rm2_button.bind(on_press=lambda x: app.select_tablet("reMarkable 2"))
         
+        # PaperPro button
+        rmpro_button = Button(text="Paper Pro", size_hint_y=None, height=dp(100))
+        rmpro_button.bind(on_press=lambda x: app.select_tablet("Paper Pro"))
+        
         # Add buttons to layout
         tablets_layout.add_widget(rm1_button)
         tablets_layout.add_widget(rm2_button)
+        tablets_layout.add_widget(rmpro_button)
         
         # Add widgets to main layout
-        layout.add_widget(title)
+        layout.add_widget(header)
         layout.add_widget(Label(text="Please select your reMarkable tablet model:"))
         layout.add_widget(tablets_layout)
         
         self.add_widget(layout)
+    
+    def open_settings(self, instance):
+        """Navigate to settings screen."""
+        safe_navigate('settings', transition_direction='left')
 
 class PDFPreviewScreen(Screen):
     def __init__(self, **kwargs):
         super(PDFPreviewScreen, self).__init__(**kwargs)
         self.layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
         
-        # Header with device info
-        header = BoxLayout(size_hint_y=None, height=dp(50))
-        self.device_label = Label(text="Selected Tablet: None")
+        # Header with device info and settings button
+        header = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
+        self.device_label = Label(text="Selected Tablet: None", size_hint_x=1)
+        
+        # Settings button
+        settings_button = get_icon_button(
+            'cog',
+            callback=self.open_settings,
+            tooltip="Settings",
+            size_hint=(None, None),
+            size=(dp(40), dp(40))
+        )
+        
         header.add_widget(self.device_label)
+        header.add_widget(settings_button)
         
         # View type selection
         view_layout = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
@@ -107,6 +144,10 @@ class PDFPreviewScreen(Screen):
         self.current_view = 'month'
         self.current_date = datetime.now()
         self.current_preview_path = None
+    
+    def open_settings(self, instance):
+        """Navigate to settings screen."""
+        safe_navigate('settings', transition_direction='left')
     
     def setup_preview(self, view_type, date):
         """Set up the preview with specified view type and date."""
@@ -241,28 +282,40 @@ class PDFPreviewScreen(Screen):
                           size_hint=(0.8, 0.4))
             popup.open()
 
-class RemarkableAgendaApp(App):
+class RemarkableAgendaApp(MDApp):
     def __init__(self, **kwargs):
         super(RemarkableAgendaApp, self).__init__(**kwargs)
         self.title = 'reMarkable Agenda Generator'
-        self.selected_tablet = None
-        self.supports_color = False
-        self.dimensions = (1404, 1872)  # Default to A5 (reMarkable 2)
         
-        # Load saved settings if they exist
-        self.load_settings()
+        # Initialize configuration manager
+        self.config_manager = ConfigManager()
+        
+        # Load device settings
+        self.selected_tablet = self.config_manager.get_setting("device", "type")
+        self.device_name = self.config_manager.get_setting("device", "name")
+        self.supports_color = (self.selected_tablet == "Paper Pro")
+        self.dimensions = self.get_dimensions(self.selected_tablet)
+        
+        # Display settings
+        self.use_24h_time = self.config_manager.get_setting("display", "use_24h_time") == "True"
+        self.monday_first = self.config_manager.get_setting("display", "monday_first") == "True"
+        
+        # Flag to track if setup is complete
+        self.has_completed_setup = bool(self.selected_tablet)
     
     def build(self):
-        # Create screen manager for navigation
-        self.screen_manager = ScreenManager(transition=NoTransition())
+        # Create screen manager with slide transition for settings
+        self.screen_manager = ScreenManager(transition=SlideTransition())
         
         # Create screens
         self.tablet_selection = TabletSelectionScreen(name='tablet_selection')
         self.pdf_preview = PDFPreviewScreen(name='pdf_preview')
+        self.settings_view = SettingsView(name='settings')
         
         # Add screens to manager
         self.screen_manager.add_widget(self.tablet_selection)
         self.screen_manager.add_widget(self.pdf_preview)
+        self.screen_manager.add_widget(self.settings_view)
         
         # Set initial screen
         if self.selected_tablet:
@@ -274,11 +327,36 @@ class RemarkableAgendaApp(App):
         
         return self.screen_manager
     
+    def on_settings_changed(self):
+        """Handle settings changes from the settings screen."""
+        # Reload all settings
+        self.selected_tablet = self.config_manager.get_setting("device", "type")
+        self.device_name = self.config_manager.get_setting("device", "name")
+        self.supports_color = (self.selected_tablet == "Paper Pro")
+        self.dimensions = self.get_dimensions(self.selected_tablet)
+        
+        # Update display settings
+        self.use_24h_time = self.config_manager.get_setting("display", "use_24h_time") == "True"
+        self.monday_first = self.config_manager.get_setting("display", "monday_first") == "True"
+        
+        # Update the PDF preview
+        if hasattr(self, 'pdf_preview'):
+            self.pdf_preview.device_label.text = f"Selected Tablet: {self.selected_tablet}"
+            self.pdf_preview.update_preview()
+    
     def select_tablet(self, tablet_model):
         """Set the selected tablet model and move to the PDF preview screen."""
         self.selected_tablet = tablet_model
         self.supports_color = (tablet_model == "Paper Pro")
-        self.save_settings()
+        
+        # Save to config manager
+        self.config_manager.set_device_settings(
+            self.device_name or "My reMarkable", 
+            tablet_model
+        )
+        
+        # Set completed setup flag
+        self.has_completed_setup = True
         
         # Update PDF preview screen
         self.pdf_preview.device_label.text = f"Selected Tablet: {self.selected_tablet}"
@@ -293,40 +371,16 @@ class RemarkableAgendaApp(App):
         # All models currently have same dimensions
         return (1404, 1872)  # A5 size
     
-    def load_settings(self):
-        """Load settings from a simple JSON file."""
-        import json
-        
-        config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config")
-        config_file = os.path.join(config_dir, "simple_config.json")
-        
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r') as f:
-                    settings = json.load(f)
-                    self.selected_tablet = settings.get('tablet_model')
-            except:
-                # If there's an error, just use defaults
-                pass
+    def format_time(self, time_obj):
+        """Format a time object according to user's settings."""
+        if self.use_24h_time:
+            return time_obj.strftime("%H:%M")
+        else:
+            return time_obj.strftime("%I:%M %p")
     
-    def save_settings(self):
-        """Save settings to a simple JSON file."""
-        import json
-        
-        config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config")
-        if not os.path.exists(config_dir):
-            os.makedirs(config_dir)
-        
-        config_file = os.path.join(config_dir, "simple_config.json")
-        settings = {
-            'tablet_model': self.selected_tablet
-        }
-        
-        try:
-            with open(config_file, 'w') as f:
-                json.dump(settings, f)
-        except Exception as e:
-            print(f"Could not save settings: {e}")
+    def get_week_start_day(self):
+        """Get the week start day as an integer (0=Monday, 6=Sunday)."""
+        return 0 if self.monday_first else 6
 
 if __name__ == "__main__":
     # Set up necessary directories

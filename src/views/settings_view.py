@@ -64,6 +64,7 @@ class SettingsView(Screen):
         # Add the settings sections
         self._create_weather_settings(settings_container)
         self._create_calendar_settings(settings_container)
+        self._create_display_settings(settings_container)
         self._create_device_settings(settings_container)
         
         # Add a Save Settings button at the bottom
@@ -259,6 +260,74 @@ class SettingsView(Screen):
         
         parent.add_widget(device_grid)
     
+    def _create_display_settings(self, parent):
+        """Create the display settings section."""
+        # Section header
+        parent.add_widget(self._create_section_header("Display Settings"))
+        
+        # Display settings grid
+        display_grid = GridLayout(cols=2, spacing=dp(10), size_hint_y=None, height=dp(120))
+        
+        # Time format setting (24-hour vs 12-hour)
+        display_grid.add_widget(Label(text="Time Format:", halign='right'))
+        time_format_layout = BoxLayout(spacing=dp(10))
+        
+        # Get current time format setting
+        use_24h = self.config_manager.get_setting("display", "use_24h_time")
+        use_24h = True if use_24h == "True" else False
+        
+        # Create toggle buttons for time format
+        h12_button = ToggleButton(
+            text="12-hour (AM/PM)",
+            group="time_format",
+            state='normal' if use_24h else 'down'
+        )
+        h24_button = ToggleButton(
+            text="24-hour",
+            group="time_format", 
+            state='down' if use_24h else 'normal'
+        )
+        
+        self.settings_inputs['time_format_buttons'] = {
+            "12h": h12_button,
+            "24h": h24_button
+        }
+        
+        time_format_layout.add_widget(h12_button)
+        time_format_layout.add_widget(h24_button)
+        display_grid.add_widget(time_format_layout)
+        
+        # Week start setting (Monday vs Sunday)
+        display_grid.add_widget(Label(text="Week Starts On:", halign='right'))
+        week_start_layout = BoxLayout(spacing=dp(10))
+        
+        # Get current week start setting
+        monday_first = self.config_manager.get_setting("display", "monday_first")
+        monday_first = True if monday_first == "True" else False
+        
+        # Create toggle buttons for week start
+        sunday_button = ToggleButton(
+            text="Sunday",
+            group="week_start",
+            state='normal' if monday_first else 'down'
+        )
+        monday_button = ToggleButton(
+            text="Monday",
+            group="week_start",
+            state='down' if monday_first else 'normal'
+        )
+        
+        self.settings_inputs['week_start_buttons'] = {
+            "sunday": sunday_button,
+            "monday": monday_button
+        }
+        
+        week_start_layout.add_widget(sunday_button)
+        week_start_layout.add_widget(monday_button)
+        display_grid.add_widget(week_start_layout)
+        
+        parent.add_widget(display_grid)
+    
     def update_calendar_list(self):
         """Update the list of calendars displayed in settings."""
         calendar_list = self.settings_inputs.get('calendar_list')
@@ -370,6 +439,27 @@ class SettingsView(Screen):
                     device_name.text.strip(),
                     device_type
                 )
+            
+            # Save display settings
+            time_format_buttons = self.settings_inputs.get('time_format_buttons', {})
+            week_start_buttons = self.settings_inputs.get('week_start_buttons', {})
+            
+            use_24h = False
+            for format_name, button in time_format_buttons.items():
+                if button.state == 'down' and format_name == "24h":
+                    use_24h = True
+                    break
+            
+            monday_first = False
+            for start_name, button in week_start_buttons.items():
+                if button.state == 'down' and start_name == "monday":
+                    monday_first = True
+                    break
+            
+            self.config_manager.set_display_settings(
+                use_24h,
+                monday_first
+            )
             
             # Update the UI to reflect any changes
             self.update_calendar_list()
